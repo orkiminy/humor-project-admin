@@ -2,6 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/utils/supabase-browser'
+import Pagination from '../_components/Pagination'
+import ExportCsvButton from '../_components/ExportCsvButton'
+import { getRange } from '@/utils/pagination'
+
+const PAGE_SIZE = 24
 
 type Image = {
   id: string
@@ -16,11 +21,13 @@ export default function ImagesPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   // Modal state
   const [showAdd, setShowAdd] = useState(false)
   const [editImage, setEditImage] = useState<Image | null>(null)
   const [deleteImage, setDeleteImage] = useState<Image | null>(null)
+  const [previewImage, setPreviewImage] = useState<Image | null>(null)
 
   // Form state
   const [formUrl, setFormUrl] = useState('')
@@ -34,8 +41,9 @@ export default function ImagesPage() {
 
   async function fetchImages() {
     setLoading(true)
+    const { from, to } = getRange(page, PAGE_SIZE)
     const [{ data }, { count }] = await Promise.all([
-      supabase.from('images').select('id, url, image_description').order('created_datetime_utc', { ascending: false, nullsFirst: false }).limit(500),
+      supabase.from('images').select('id, url, image_description').order('created_datetime_utc', { ascending: false, nullsFirst: false }).range(from, to),
       supabase.from('images').select('*', { count: 'exact', head: true }),
     ])
     setTotalCount(count ?? 0)
@@ -51,7 +59,7 @@ export default function ImagesPage() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchImages() }, [])
+  useEffect(() => { fetchImages() }, [page])
 
   const openAdd = () => {
     setFormUrl(''); setFormDesc(''); setUploadStatus(null)
@@ -186,9 +194,17 @@ export default function ImagesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Images</h1>
           <p className="text-gray-400 mt-1">{totalCount} total images</p>
         </div>
-        <button onClick={openAdd} className="bg-orange-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-orange-600 transition-colors text-sm">
-          + Add Image
-        </button>
+        <div className="flex gap-2">
+          <ExportCsvButton
+            table="images"
+            filename="images"
+            columns={['id', 'url', 'image_description', 'is_public', 'created_datetime_utc']}
+            filterBuilder={q => q.order('created_datetime_utc', { ascending: false, nullsFirst: false })}
+          />
+          <button onClick={openAdd} className="bg-orange-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-orange-600 transition-colors text-sm">
+            + Add Image
+          </button>
+        </div>
       </div>
 
       <input
@@ -210,7 +226,8 @@ export default function ImagesPage() {
               <img
                 src={img.url}
                 alt=""
-                className="w-full aspect-video object-cover bg-gray-100"
+                className="w-full aspect-video object-cover bg-gray-100 cursor-zoom-in"
+                onClick={() => setPreviewImage(img)}
                 onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/400x225?text=No+Image' }}
               />
               <div className="p-4">
@@ -231,6 +248,15 @@ export default function ImagesPage() {
           ))}
         </div>
       )}
+
+      <Pagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        totalCount={totalCount}
+        onPageChange={setPage}
+        loading={loading}
+        itemLabel="images"
+      />
 
       {/* Add Modal */}
       {showAdd && (
@@ -305,6 +331,43 @@ export default function ImagesPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Preview Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm cursor-zoom-out"
+          onClick={() => setPreviewImage(null)}
+          data-testid="image-preview-modal"
+        >
+          <div className="max-w-4xl w-full max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+            <img
+              src={previewImage.url}
+              alt=""
+              className="max-w-full max-h-[75vh] object-contain rounded-xl shadow-2xl"
+              onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/800x450?text=No+Image' }}
+            />
+            <div className="mt-4 bg-white rounded-xl px-5 py-3 shadow-lg max-w-2xl">
+              <p className="text-sm text-gray-800">
+                {previewImage.image_description || <span className="text-gray-400 italic">No description</span>}
+              </p>
+              <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                <span className="font-mono truncate max-w-[300px]">{previewImage.id}</span>
+                <span>·</span>
+                <span>{previewImage.caption_count ?? 0} caption{previewImage.caption_count !== 1 ? 's' : ''}</span>
+                <span>·</span>
+                <a href={previewImage.url} target="_blank" rel="noreferrer" className="text-orange-500 hover:underline">open original</a>
+              </div>
+            </div>
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-6 right-6 text-white/70 hover:text-white text-3xl"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Delete Modal */}
