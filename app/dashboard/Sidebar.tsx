@@ -9,6 +9,7 @@ const sections = [
     label: 'Overview',
     items: [
       { href: '/dashboard', label: 'Statistics', icon: '📊', exact: true },
+      { href: '/dashboard/caption-ratings', label: 'Caption Ratings', icon: '⭐' },
       { href: '/dashboard/users', label: 'Users', icon: '👥' },
     ],
   },
